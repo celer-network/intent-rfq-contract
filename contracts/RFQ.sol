@@ -4,6 +4,7 @@ pragma solidity >=0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "./message/framework/MessageSenderApp.sol";
 import "./message/framework/MessageReceiverApp.sol";
 import "./safeguard/Pauser.sol";
@@ -11,9 +12,11 @@ import "./safeguard/Governor.sol";
 import "./message/interfaces/IMessageBus.sol";
 import "./interfaces/IWETH.sol";
 
+
 /** @title rfq contract */
 contract RFQ is MessageSenderApp, MessageReceiverApp, Pauser, Governor {
     using SafeERC20 for IERC20;
+    using ECDSA for bytes32;
 
     struct Quote {
         uint64 srcChainId;
@@ -40,7 +43,7 @@ contract RFQ is MessageSenderApp, MessageReceiverApp, Pauser, Governor {
         SrcRefundedNative, // refunded native token to refundTo/sender
         DstRefundInitiated, // refund initiated
         DstTransferred, // transferred ERC20 token to receiver
-        DstTransferredNative // transferred native token to reciever
+        DstTransferredNative // transferred native token to receiver
     }
 
     enum MessageType {
@@ -50,6 +53,8 @@ contract RFQ is MessageSenderApp, MessageReceiverApp, Pauser, Governor {
     }
 
     address public nativeWrap;
+    uint256 public nativeTokenTransferGas = 50000;
+
     mapping(uint64 => address) public remoteRfqContracts;
     // msg => bool
     mapping(bytes32 => bool) public unconsumedMsg;
@@ -62,6 +67,9 @@ contract RFQ is MessageSenderApp, MessageReceiverApp, Pauser, Governor {
     mapping(uint64 => uint32) public feePercOverride;
     // tokenAddr => feeBalance
     mapping(address => uint256) public protocolFee;
+
+    // market maker => allowed signer
+    mapping(address => address) public allowedSigner;
 
     event SrcDeposited(bytes32 quoteHash, Quote quote);
     event DstTransferred(bytes32 quoteHash, address receiver, address dstToken, uint256 amount);
@@ -153,6 +161,17 @@ contract RFQ is MessageSenderApp, MessageReceiverApp, Pauser, Governor {
         emit DstTransferred(quoteHash, _quote.receiver, _quote.dstToken, _quote.dstAmount);
     }
 
+    // As transferFrom is not available for native token, dstTransferNativeWithSig is not supported
+    function dstTransferWithSig(Quote calldata _quote, bytes calldata _sig) external payable whenNotPaused {
+        (bytes32 quoteHash, address msgReceiver) = _dstTransferCheck(_quote);
+        verifySigOfQuoteHash(_quote.liquidityProvider, quoteHash, _sig);
+        quotes[quoteHash] = QuoteStatus.DstTransferred;
+        bytes memory message = abi.encodePacked(keccak256(abi.encodePacked(quoteHash, MessageType.Release)));
+        sendMessage(msgReceiver, _quote.srcChainId, message, msg.value);
+        IERC20(_quote.dstToken).safeTransferFrom(_quote.liquidityProvider, _quote.receiver, _quote.dstAmount);
+        emit DstTransferred(quoteHash, _quote.receiver, _quote.dstToken, _quote.dstAmount);
+    }
+
     function sameChainTransfer(Quote calldata _quote, bool _releaseNative) external payable whenNotPaused {
         require(_quote.srcChainId == _quote.dstChainId, "Rfq: not same chain swap");
         (bytes32 quoteHash, ) = _dstTransferCheck(_quote);
@@ -167,6 +186,20 @@ contract RFQ is MessageSenderApp, MessageReceiverApp, Pauser, Governor {
         require(msg.value == _quote.dstAmount, "Rfq: native token amount mismatch");
         (bytes32 quoteHash, ) = _dstTransferCheck(_quote);
         _transferNativeToken(_quote.receiver, _quote.dstAmount);
+        _srcRelease(_quote, quoteHash, _releaseNative);
+        emit DstTransferred(quoteHash, _quote.receiver, _quote.dstToken, _quote.dstAmount);
+    }
+
+    // As transferFrom is not available for native token, sameChainTransferNativeWithSig is not supported
+    function sameChainTransferWithSig(
+        Quote calldata _quote,
+        bool _releaseNative,
+        bytes calldata _sig
+    ) external payable whenNotPaused {
+        require(_quote.srcChainId == _quote.dstChainId, "Rfq: not same chain swap");
+        (bytes32 quoteHash, ) = _dstTransferCheck(_quote);
+        verifySigOfQuoteHash(_quote.liquidityProvider, quoteHash, _sig);
+        IERC20(_quote.dstToken).safeTransferFrom(_quote.liquidityProvider, _quote.receiver, _quote.dstAmount);
         _srcRelease(_quote, quoteHash, _releaseNative);
         emit DstTransferred(quoteHash, _quote.receiver, _quote.dstToken, _quote.dstAmount);
     }
@@ -283,6 +316,14 @@ contract RFQ is MessageSenderApp, MessageReceiverApp, Pauser, Governor {
         emit FeeCollected(treasuryAddr, _token, feeAmount);
     }
 
+    function registerAllowedSigner(address _signer) external {
+        if (_signer == address(0)) {
+            delete (allowedSigner[msg.sender]);
+        } else {
+            allowedSigner[msg.sender] = _signer;
+        }
+    }
+
     // This is needed to receive ETH
     receive() external payable {}
 
@@ -321,6 +362,25 @@ contract RFQ is MessageSenderApp, MessageReceiverApp, Pauser, Governor {
         return IMessageBus(messageBus).calcFee(_message);
     }
 
+    function getSignerOfQuoteHash(bytes32 _quoteHash, bytes calldata _sig) public view returns (address) {
+        bytes32 msgHash = keccak256(abi.encodePacked(block.chainid, address(this), "AllowedTransfer", _quoteHash))
+            .toEthSignedMessageHash();
+        return msgHash.recover(_sig);
+    }
+
+    function verifySigOfQuoteHash(
+        address _liquidityProvider,
+        bytes32 _quoteHash,
+        bytes calldata _sig
+    ) public view {
+        address signer = getSignerOfQuoteHash(_quoteHash, _sig);
+        require(
+            signer == _liquidityProvider ||
+                (allowedSigner[_liquidityProvider] != address(0) && signer == allowedSigner[_liquidityProvider]),
+            "Rfq: not allowed signer"
+        );
+    }
+
     function _receiveMessage(
         bytes calldata _execMsgCallData,
         bytes32 _quoteHash,
@@ -337,14 +397,14 @@ contract RFQ is MessageSenderApp, MessageReceiverApp, Pauser, Governor {
 
     function _transferNativeToken(address _receiver, uint256 _amount) private {
         require(nativeWrap != address(0), "Rfq: native wrap not set");
-        (bool sent, ) = _receiver.call{value: _amount, gas: 50000}("");
+        (bool sent, ) = _receiver.call{value: _amount, gas: nativeTokenTransferGas}("");
         require(sent, "Rfq: failed to transfer native token");
     }
 
     function _withdrawNativeToken(address _receiver, uint256 _amount) private {
         require(nativeWrap != address(0), "Rfq: native wrap not set");
         IWETH(nativeWrap).withdraw(_amount);
-        (bool sent, ) = _receiver.call{value: _amount, gas: 50000}("");
+        (bool sent, ) = _receiver.call{value: _amount, gas: nativeTokenTransferGas}("");
         require(sent, "Rfq: failed to withdraw native token");
     }
 
@@ -381,5 +441,9 @@ contract RFQ is MessageSenderApp, MessageReceiverApp, Pauser, Governor {
 
     function setNativeWrap(address _nativeWrap) external onlyOwner {
         nativeWrap = _nativeWrap;
+    }
+
+    function setNativeTokenTransferGas(uint256 _gasUsed) external onlyOwner {
+        nativeTokenTransferGas = _gasUsed;
     }
 }
