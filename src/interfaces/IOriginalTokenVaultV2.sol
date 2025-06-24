@@ -2,7 +2,7 @@
 
 pragma solidity >=0.8.0;
 
-interface IOriginalTokenVault {
+interface IOriginalTokenVaultV2 {
     /**
      * @notice Lock original tokens to trigger mint at a remote chain's PeggedTokenBridge
      * @param _token local token address
@@ -11,13 +11,9 @@ interface IOriginalTokenVault {
      * @param _mintAccount destination account to receive minted tokens
      * @param _nonce user input to guarantee unique depositId
      */
-    function deposit(
-        address _token,
-        uint256 _amount,
-        uint64 _mintChainId,
-        address _mintAccount,
-        uint64 _nonce
-    ) external;
+    function deposit(address _token, uint256 _amount, uint64 _mintChainId, address _mintAccount, uint64 _nonce)
+        external
+        returns (bytes32);
 
     /**
      * @notice Lock native token as original token to trigger mint at a remote chain's PeggedTokenBridge
@@ -26,12 +22,10 @@ interface IOriginalTokenVault {
      * @param _mintAccount destination account to receive minted tokens
      * @param _nonce user input to guarantee unique depositId
      */
-    function depositNative(
-        uint256 _amount,
-        uint64 _mintChainId,
-        address _mintAccount,
-        uint64 _nonce
-    ) external payable;
+    function depositNative(uint256 _amount, uint64 _mintChainId, address _mintAccount, uint64 _nonce)
+        external
+        payable
+        returns (bytes32);
 
     /**
      * @notice Withdraw locked original tokens triggered by a burn at a remote chain's PeggedTokenBridge.
@@ -46,7 +40,7 @@ interface IOriginalTokenVault {
         bytes[] calldata _sigs,
         address[] calldata _signers,
         uint256[] calldata _powers
-    ) external;
+    ) external returns (bytes32);
 
     function records(bytes32 recordId) external view returns (bool);
 }

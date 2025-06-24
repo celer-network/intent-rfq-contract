@@ -76,22 +76,11 @@ library MessageSenderLib {
         uint256 _fee
     ) internal returns (bytes32) {
         (bytes32 transferId, address bridge) = sendTokenTransfer(
-            _receiver,
-            _token,
-            _amount,
-            _dstChainId,
-            _nonce,
-            _maxSlippage,
-            _bridgeSendType,
-            _messageBus
+            _receiver, _token, _amount, _dstChainId, _nonce, _maxSlippage, _bridgeSendType, _messageBus
         );
         if (_message.length > 0) {
             IMessageBus(_messageBus).sendMessageWithTransfer{value: _fee}(
-                _receiver,
-                _dstChainId,
-                bridge,
-                transferId,
-                _message
+                _receiver, _dstChainId, bridge, transferId, _message
             );
         }
         return transferId;
@@ -164,10 +153,9 @@ library MessageSenderLib {
         uint64 _dstChainId,
         uint64 _nonce
     ) internal view returns (bytes32) {
-        return
-            keccak256(
-                abi.encodePacked(address(this), _receiver, _token, _amount, _dstChainId, _nonce, uint64(block.chainid))
-            );
+        return keccak256(
+            abi.encodePacked(address(this), _receiver, _token, _amount, _dstChainId, _nonce, uint64(block.chainid))
+        );
     }
 
     function computePegV1DepositId(
@@ -177,18 +165,16 @@ library MessageSenderLib {
         uint64 _dstChainId,
         uint64 _nonce
     ) internal view returns (bytes32) {
-        return
-            keccak256(
-                abi.encodePacked(address(this), _token, _amount, _dstChainId, _receiver, _nonce, uint64(block.chainid))
-            );
+        return keccak256(
+            abi.encodePacked(address(this), _token, _amount, _dstChainId, _receiver, _nonce, uint64(block.chainid))
+        );
     }
 
-    function computePegV1BurnId(
-        address _receiver,
-        address _token,
-        uint256 _amount,
-        uint64 _nonce
-    ) internal view returns (bytes32) {
+    function computePegV1BurnId(address _receiver, address _token, uint256 _amount, uint64 _nonce)
+        internal
+        view
+        returns (bytes32)
+    {
         return keccak256(abi.encodePacked(address(this), _token, _amount, _receiver, _nonce, uint64(block.chainid)));
     }
 }

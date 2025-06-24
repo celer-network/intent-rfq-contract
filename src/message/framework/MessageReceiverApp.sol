@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.20;
 
-interface IMessageReceiverApp {
-    enum ExecutionStatus {
-        Fail, // execution failed, finalized
-        Success, // execution succeeded, finalized
-        Retry // execution rejected, can retry later
+import "../interfaces/IMessageReceiverApp.sol";
+import "./MessageBusAddress.sol";
+
+abstract contract MessageReceiverApp is IMessageReceiverApp, MessageBusAddress {
+    modifier onlyMessageBus() {
+        require(msg.sender == messageBus, "caller is not message bus");
+        _;
     }
 
     /**
@@ -16,21 +18,25 @@ interface IMessageReceiverApp {
      * @param _message Arbitrary message bytes originated from and encoded by the source app contract
      * @param _executor Address who called the MessageBus execution function
      */
-    function executeMessage(
-        address _sender,
-        uint64 _srcChainId,
-        bytes calldata _message,
-        address _executor
-    ) external payable returns (ExecutionStatus);
+    function executeMessage(address _sender, uint64 _srcChainId, bytes calldata _message, address _executor)
+        external
+        payable
+        virtual
+        override
+        onlyMessageBus
+        returns (ExecutionStatus)
+    {}
 
-    // same as above, except that sender is an non-evm chain address,
+    // execute message from non-evm chain with bytes for sender address,
     // otherwise same as above.
-    function executeMessage(
-        bytes calldata _sender,
-        uint64 _srcChainId,
-        bytes calldata _message,
-        address _executor
-    ) external payable returns (ExecutionStatus);
+    function executeMessage(bytes calldata _sender, uint64 _srcChainId, bytes calldata _message, address _executor)
+        external
+        payable
+        virtual
+        override
+        onlyMessageBus
+        returns (ExecutionStatus)
+    {}
 
     /**
      * @notice Called by MessageBus to execute a message with an associated token transfer.
@@ -49,7 +55,7 @@ interface IMessageReceiverApp {
         uint64 _srcChainId,
         bytes calldata _message,
         address _executor
-    ) external payable returns (ExecutionStatus);
+    ) external payable virtual override onlyMessageBus returns (ExecutionStatus) {}
 
     /**
      * @notice Only called by MessageBus if
@@ -70,7 +76,7 @@ interface IMessageReceiverApp {
         uint64 _srcChainId,
         bytes calldata _message,
         address _executor
-    ) external payable returns (ExecutionStatus);
+    ) external payable virtual override onlyMessageBus returns (ExecutionStatus) {}
 
     /**
      * @notice Called by MessageBus to process refund of the original transfer from this contract.
@@ -85,5 +91,5 @@ interface IMessageReceiverApp {
         uint256 _amount,
         bytes calldata _message,
         address _executor
-    ) external payable returns (ExecutionStatus);
+    ) external payable virtual override onlyMessageBus returns (ExecutionStatus) {}
 }

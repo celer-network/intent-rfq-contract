@@ -10,12 +10,7 @@ interface IPeggedTokenBridge {
      * @param _withdrawAccount account who withdraw original tokens on the remote chain
      * @param _nonce user input to guarantee unique depositId
      */
-    function burn(
-        address _token,
-        uint256 _amount,
-        address _withdrawAccount,
-        uint64 _nonce
-    ) external;
+    function burn(address _token, uint256 _amount, address _withdrawAccount, uint64 _nonce) external;
 
     /**
      * @notice Mint tokens triggered by deposit at a remote chain's OriginalTokenVault.

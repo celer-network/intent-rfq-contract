@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-pragma solidity 0.8.9;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "../libraries/MsgDataTypes.sol";
 import "../libraries/MessageSenderLib.sol";
-import "../messagebus/MessageBus.sol";
 import "./MessageBusAddress.sol";
 
 abstract contract MessageSenderApp is MessageBusAddress {
@@ -25,23 +24,13 @@ abstract contract MessageSenderApp is MessageBusAddress {
      * @param _message Arbitrary message bytes to be decoded by the destination app contract.
      * @param _fee The fee amount to pay to MessageBus.
      */
-    function sendMessage(
-        address _receiver,
-        uint64 _dstChainId,
-        bytes memory _message,
-        uint256 _fee
-    ) internal {
+    function sendMessage(address _receiver, uint64 _dstChainId, bytes memory _message, uint256 _fee) internal {
         MessageSenderLib.sendMessage(_receiver, _dstChainId, _message, messageBus, _fee);
     }
 
     // Send message to non-evm chain with bytes for receiver address,
     // otherwise same as above.
-    function sendMessage(
-        bytes calldata _receiver,
-        uint64 _dstChainId,
-        bytes memory _message,
-        uint256 _fee
-    ) internal {
+    function sendMessage(bytes calldata _receiver, uint64 _dstChainId, bytes memory _message, uint256 _fee) internal {
         MessageSenderLib.sendMessage(_receiver, _dstChainId, _message, messageBus, _fee);
     }
 
@@ -73,19 +62,9 @@ abstract contract MessageSenderApp is MessageBusAddress {
         MsgDataTypes.BridgeSendType _bridgeSendType,
         uint256 _fee
     ) internal returns (bytes32) {
-        return
-            MessageSenderLib.sendMessageWithTransfer(
-                _receiver,
-                _token,
-                _amount,
-                _dstChainId,
-                _nonce,
-                _maxSlippage,
-                _message,
-                _bridgeSendType,
-                messageBus,
-                _fee
-            );
+        return MessageSenderLib.sendMessageWithTransfer(
+            _receiver, _token, _amount, _dstChainId, _nonce, _maxSlippage, _message, _bridgeSendType, messageBus, _fee
+        );
     }
 
     /**
@@ -111,18 +90,17 @@ abstract contract MessageSenderApp is MessageBusAddress {
         uint32 _maxSlippage,
         MsgDataTypes.BridgeSendType _bridgeSendType
     ) internal returns (bytes32) {
-        return
-            MessageSenderLib.sendMessageWithTransfer(
-                _receiver,
-                _token,
-                _amount,
-                _dstChainId,
-                _nonce,
-                _maxSlippage,
-                "", // empty message, which will not trigger sendMessage
-                _bridgeSendType,
-                messageBus,
-                0
-            );
+        return MessageSenderLib.sendMessageWithTransfer(
+            _receiver,
+            _token,
+            _amount,
+            _dstChainId,
+            _nonce,
+            _maxSlippage,
+            "", // empty message, which will not trigger sendMessage
+            _bridgeSendType,
+            messageBus,
+            0
+        );
     }
 }

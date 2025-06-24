@@ -12,22 +12,14 @@ interface IPeggedTokenBridgeV2 {
      * @param _toAccount The account to receive tokens on the remote chain
      * @param _nonce A number to guarantee unique depositId. Can be timestamp in practice.
      */
-    function burn(
-        address _token,
-        uint256 _amount,
-        uint64 _toChainId,
-        address _toAccount,
-        uint64 _nonce
-    ) external returns (bytes32);
+    function burn(address _token, uint256 _amount, uint64 _toChainId, address _toAccount, uint64 _nonce)
+        external
+        returns (bytes32);
 
     // same with `burn` above, use openzeppelin ERC20Burnable interface
-    function burnFrom(
-        address _token,
-        uint256 _amount,
-        uint64 _toChainId,
-        address _toAccount,
-        uint64 _nonce
-    ) external returns (bytes32);
+    function burnFrom(address _token, uint256 _amount, uint64 _toChainId, address _toAccount, uint64 _nonce)
+        external
+        returns (bytes32);
 
     /**
      * @notice Mint tokens triggered by deposit at a remote chain's OriginalTokenVault.
